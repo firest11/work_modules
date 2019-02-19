@@ -1,0 +1,48 @@
+import numpy as np
+
+
+# Aux Funcs
+def shift_axis(data, shift):
+    shape = data.shape
+    new_shape = [0]*len(shape)
+    for j, shp in enumerate(shape):
+        new_shape[(j+shift)%len(shape)] = shp
+    new_data = np.zeros(new_shape, dtype=data.dtype)
+    
+
+
+# All for 2d data sets
+def mean_cov(data, axis=0):
+    assert data.ndim == 2
+    Ncf, Nt = data.shape
+    mean = data.mean(axis)
+    cov = np.zeros((Ncf, Nt, Nt), dtype=data.dtype)
+    for j in range(Ncf):
+        cov[j] = np.outer((mean-data[j]), (mean-data[j].conj()))
+    cov = cov.sum(0)/(Ncf-1.0)
+    return mean, cov
+
+
+def mean_var(data, axis=0):
+    mean, cov = mean_cov(data, axis)
+    var = cov.diagonal()
+    return mean, var
+
+
+# Now looking at Jackknife Samples
+def jk_blocks(data, nbins):
+    ## axis always 0 dammit
+    # If I want Ncf bins, I take out 1
+    # If I want Ncf/2 bins, I take out 2
+    # Therefore, take-out = data/nbins
+    # Each bin has Ncf - Ncf/nbins entries
+    Ncf = data.shape[0]
+    take_out =  Ncf/nbins
+    assert Ncf/nbins % 0
+    newshape = tuple([nbins, Ncf - take_out] + list(data.shape[1:]))
+    # jk_dat = 
+
+    delinds = np.arange(0, Ncf, take_out)
+    ct = 0
+    while delinds[-1] < Ncf:
+        

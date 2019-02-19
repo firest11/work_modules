@@ -1,0 +1,96 @@
+"""
+fitfuncs.py:
+
+Module containing all of the fit-functions I desire to... fit to.
+For two-point and three-point functions
+
+***TODO***
+
+two-point function for baryons
+debug what I already have :p
+
+"""
+
+
+import itertools as it
+import numpy as np
+import setup_lat as sl
+
+
+T = sl.T/2.0
+
+#-------------------- Aux-Funcs --------------------#
+def fix_param(func, fix_tuple):
+    """ Fixes parameters for fit funcs """
+    def new_func(t, *pars):
+        """ wrapper """
+        new_pars = [None]*(len(fix_tuple) + len(pars))
+        for f_it, fix in fix_tuple:
+            new_pars[f_it] = fix
+        for p in pars:
+            for np_it, np_val in enumerate(new_pars):
+                if np_val is not None:
+                    new_pars[np_it] = p
+                    break
+        assert None not in new_pars
+        return func(t, *new_pars)
+    return new_func
+
+
+#-------------------- C2pt --------------------#
+def c2pt(t, *p):
+    """ fit function for meson 2pt correlator """
+    val = 0
+    for j in range(0, len(p), 2):
+        val += 2*p[j]*np.exp(-p[j+1]*T)*np.cosh(p[j+1]*(T - t))
+    return val
+
+
+def c2pt_jac(t, *p):
+    """ jacobian for meson 2pt correlator """
+    val = np.zeros((len(p), len(t)))
+    for j in range(0, len(p), 2):
+        val[j] = 2*np.exp(-p[j+1]*T)*np.cosh(p[j+1]*(T - t))
+        v1 = -T*np.cosh(p[j+1]*(T - t))
+        v2 = 2*(T - t)*np.sinh(p[j+1]*(T - t))
+        val[j+1] = p[j]*np.exp(-p[j+1]*T)*(v1 + v2)
+    return val.T
+
+
+#-------------------- C3pt --------------------#
+def cross_terms(Ea, Eb, dt, tau, gamma_terms):
+    """
+    Returns off-diagonal terms in spectral decomposition of three-point function
+    """
+    gstruct, lb = gamma_terms
+    assert lb in ['real', 'imag']
+    fct = 1 if lb == 'real' else -1
+    gph = sl.gph_table[gstruct]
+    cf = fct*gph
+
+    Eba = Eb-Ea
+    return np.exp(-Eb*dt + Eba*tau) + cf*np.exp(-Ea*dt - Eba*tau)
+
+
+def c3pt(fix_pars, extra, xs, *par):
+    """
+    Returns three-point function calculation for given gamma-structure
+    as well as parameters extracted from two-point function
+    """
+    gstruct, lb = extra[0], extra[1]
+    dt, tau = xs[0], xs[1]
+    amps, ergs = [], []
+    for fp in fix_pars:
+        amps.append(fp[0]), ergs.append(fp[1])
+
+    ergs_comb = list(it.combinations(ergs, 2))
+    assert len(par) == len(ergs)*(len(ergs)+3)/2
+    assert len(par) == len(ergs) + len(ergs_comb)
+
+    fwrd = 0
+    for amp, erg, p in zip(amps, ergs, par):
+        fwrd += amp*np.exp(-erg*dt)*p
+    cross = 0
+    for ergc, p in zip(ergs_comb, par[len(amp):]):
+        cross += cross_terms(ergc[0], ergc[1], dt, tau, (gstruct, lb))*p
+    return fwrd + cross
